@@ -4,13 +4,19 @@ import android.content.Context;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.gprinter.io.PortManager;
+
+import java.io.IOException;
 import java.sql.Time;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -39,15 +45,24 @@ public class PrinterChangeListener {
 
 
     /**
+     *
+     */
+    public static ConcurrentHashMap<String, PortManager> concurrentMap;
+
+
+    /**
      * 获取最大监听打印机的个数
      *
      * @return maximumPoolSize
      */
     public static int getMaximumPoolSize() {
+
         return maximumPoolSize;
     }
 
-    //线程池最大容纳线程数(这里限制连接打印机的数量：测试华为平板为最大监听 9个打印机  )
+    /**
+     * 线程池最大容纳线程数(这里限制连接打印机的数量：测试华为平板为最大监听 9个打印机  )
+     */
     private static final int maximumPoolSize = CPU_COUNT * 2 + 1;
 
 
@@ -82,6 +97,7 @@ public class PrinterChangeListener {
 
     private static Timer timer;
 
+    private static Long period = 2000L;
 
     public static PrinterChangeListener getInstance(Context context) {
 
@@ -93,10 +109,17 @@ public class PrinterChangeListener {
 
             timer = new Timer();
 
-            initCommand();
+            data = new Vector<>(esc.length);
+
+            for (int i = 0; i < esc.length; i++) {
+
+                data.add(esc[i]);
+            }
 
             //最大线程数 maximumPoolSize 个
             executorService = newFixThreadPool(maximumPoolSize);
+
+            concurrentMap = new ConcurrentHashMap();
 
 
         }
@@ -106,39 +129,60 @@ public class PrinterChangeListener {
     }
 
     /**
-     * 初始化打印机指令
+     * 定时向所有打印机发送询问指令
      */
-    private static void initCommand() {
-        data = new Vector<>(esc.length);
+    public  void openPrinterListener() {
 
-        for (int i = 0; i < esc.length; i++) {
 
-            data.add(esc[i]);
+
+       PortManager portManager = concurrentMap.get("101");
+
+        try {
+            portManager.writeDataImmediately(data, 0, data.size());
+
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-    }
-
-
-    /**
-     * 执行定时任务去监听各个打印机的状态
-     */
-    public static void openPrinterListener(Long period) {
 
         Objects.requireNonNull(timer, "首先要初始化PrinterChangeListener监听器～");
 
+/*
         timer.schedule(new TimerTask() {
             @Override
             public void run() {
 
 
+         *//*       try {
+                    concurrentMap.get("101").writeDataImmediately(data, 0, data.size());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+*//*
+        *//*        Iterator iterator = concurrentMap.entrySet().iterator();
+
+                while (iterator.hasNext()) {
+
+                    Map.Entry<String, PortManager> entry = (Map.Entry<String, PortManager>) iterator.next();
+
+                    try {
+                        entry.getValue().writeDataImmediately(data, 0, data.size());
+
+                        Log.e("DOAING",entry.getKey());
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
+                }*//*
             }
-        }, 0, period);
+        }, 0, period);*/
 
     }
 
     /**
      * 关闭定时器
      */
-    public static void closePrinterListener() {
+    public  void closePrinterListener() {
 
         if (timer != null) {
 
@@ -152,15 +196,18 @@ public class PrinterChangeListener {
      *
      * @param workRunnable
      */
-    public static void addPoolThread(WorkRunnable workRunnable) {
+    public  void addPoolThread(WorkRunnable workRunnable) {
 
         Objects.requireNonNull(executorService, "请首先初始化线程池～");
 
         if (workPool.size() < maximumPoolSize) {
 
+            //执行当前打印机监听线程
             executorService.execute(workRunnable);
 
+            //缓存当前打印机监听线程到工作线程map
             workPool.put(workRunnable.getName(), workRunnable);
+
 
         } else {
 
@@ -168,34 +215,46 @@ public class PrinterChangeListener {
 
         }
 
-
     }
+
 
     public static ExecutorService newFixThreadPool(int size) {
         return new ThreadPoolExecutor(size, size, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>());
     }
 
     /**
-     * 关闭指定名称的打印机实时监听
+     * 关闭指定名称的打印机实时监听，从map中拿到指定的打印机监听线程
      *
      * @param name
      */
-    public static void freeWorkPool(String name) {
+    public  boolean freeWorkPool(String name) {
 
+        //获取工作线程
         WorkRunnable workRunnable = workPool.get(name);
 
         if (workRunnable != null) {
 
-            Toast.makeText(myContext, "解除" + workRunnable.getName() + "监听", Toast.LENGTH_SHORT).show();
-
             workRunnable.setListenerStatus(false);
+
+            //移除当前打印机指令查询
+            concurrentMap.remove(name);
+
+            if (concurrentMap.isEmpty()) {
+
+                closePrinterListener();
+            }
+
+            return true;
         }
+
+
+        return false;
     }
 
     /**
      * 终止所有的打印机监听
      */
-    public static void shutdownAllPool() {
+    public  void shutdownAllPool() {
 
         if (executorService != null) {
 
@@ -203,6 +262,9 @@ public class PrinterChangeListener {
 
             Toast.makeText(myContext, "解除所有打印机监听", Toast.LENGTH_SHORT).show();
 
+
+            //关闭所有的打印机指令查询
+            closePrinterListener();
         }
 
 

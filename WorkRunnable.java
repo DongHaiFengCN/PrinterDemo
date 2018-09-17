@@ -3,8 +3,6 @@ package com.example.ydd.myapplication;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
@@ -21,13 +19,16 @@ public class WorkRunnable implements Runnable {
 
     private PortManager portManager;
 
+    /**
+     * 打印机名称
+     */
     private String name;
 
     volatile private boolean isRunning = true;
 
     private LocalBroadcastManager localBroadcastManager;
 
-    public WorkRunnable(Context context,PortManager portManager, String name) {
+    public WorkRunnable(Context context, PortManager portManager, String name) {
 
         this.portManager = portManager;
 
@@ -41,27 +42,33 @@ public class WorkRunnable implements Runnable {
     public void run() {
 
         byte[] buffer = new byte[100];
-
+        int len = 0;
 
         {
 
-            try {
 
-                portManager.readData(buffer);
 
-            } catch (IOException e) {
+            while (isRunning) {
 
-                e.printStackTrace();
+                try {
+                    len = portManager.readData(buffer);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+                if (len > 0) {
+
+                    Intent intent = new Intent(PRINTER_URL);
+                    Bundle bundle = new Bundle();
+                    bundle.putByteArray(READ_BUFFER_ARRAY, buffer);
+                    bundle.putString(READ_NAME, name);
+                    intent.putExtra(READ_DATA, bundle);
+                    localBroadcastManager.sendBroadcast(intent);
+                }
+
+
+
             }
-
-            {
-                Intent intent = new Intent(PRINTER_URL);
-                Bundle bundle = new Bundle();
-                bundle.putByteArray(READ_BUFFER_ARRAY, buffer);
-                bundle.putString(READ_NAME, name);
-                intent.putExtra(READ_DATA,bundle);
-                localBroadcastManager.sendBroadcast(intent);
-            } while (isRunning);
 
         }
 

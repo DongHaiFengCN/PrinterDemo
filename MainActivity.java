@@ -5,22 +5,17 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
 import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
-
 import com.gprinter.command.EscCommand;
 import com.gprinter.command.LabelCommand;
 import com.gprinter.io.EthernetPort;
 import com.gprinter.io.PortManager;
-
 import java.io.IOException;
 import java.util.Vector;
-
 import static com.example.ydd.myapplication.PrinterChangeListener.ESC_STATE_COVER_OPEN;
 import static com.example.ydd.myapplication.PrinterChangeListener.ESC_STATE_ERR_OCCURS;
 import static com.example.ydd.myapplication.PrinterChangeListener.ESC_STATE_PAPER_ERR;
@@ -32,15 +27,16 @@ import static com.example.ydd.myapplication.PrinterChangeListener.esc;
 
 public class MainActivity extends AppCompatActivity {
 
-
     private EthernetPort ethernetPort1;
     private EthernetPort ethernetPort2;
+    int i = 0;
 
+
+    private PrinterChangeListener printerChangeListener;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
 
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(PRINTER_URL);
@@ -49,32 +45,15 @@ public class MainActivity extends AppCompatActivity {
         //注册本地接收器
         LocalBroadcastManager.getInstance(this).registerReceiver(localReceiver, intentFilter);
 
-
         //初始化监听监听器
-        PrinterChangeListener.getInstance(getApplicationContext());
+        printerChangeListener = PrinterChangeListener.getInstance(getApplicationContext());
 
-        //定时发送监听任务
-        PrinterChangeListener.openPrinterListener((long) 2000);
-
-
-
-
-        final Vector<Byte> data = new Vector<>(esc.length);
-
-
-
-        for (int i = 0; i < esc.length; i++) {
-
-            data.add(esc[i]);
-        }
 
         ethernetPort1 = new EthernetPort("192.168.2.101", 9100);
 
         Log.e("DOAING", ethernetPort1.openPort() + " 第一个打开");
 
-        PrinterChangeListener.addPoolThread(new WorkRunnable(getApplicationContext(), ethernetPort1, "101"));
-
-
+        printerChangeListener.addPoolThread(new WorkRunnable(getApplicationContext(), ethernetPort1, "101"));
 
 
 
@@ -82,21 +61,22 @@ public class MainActivity extends AppCompatActivity {
 
         Log.e("DOAING", ethernetPort2.openPort() + " 第二个打开");
 
-        PrinterChangeListener.addPoolThread(new WorkRunnable(getApplicationContext(), ethernetPort2, "201"));
+        printerChangeListener.addPoolThread(new WorkRunnable(getApplicationContext(), ethernetPort2, "201"));
+
+
+
+
+
+        //动态的添加新打印机新数据 测试
+        printerChangeListener.concurrentMap.put("101",ethernetPort1);
+
+        printerChangeListener.concurrentMap.put("201",ethernetPort2);
 
         findViewById(R.id.printa_bt).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
 
-                PrinterChangeListener.closePrinterListener();
-
-/*
-                try {
-                    ethernetPort1.writeDataImmediately(data);
-
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }*/
+                printerChangeListener.openPrinterListener();
 
             }
         });
@@ -105,11 +85,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
 
-                try {
-                    ethernetPort2.writeDataImmediately(data);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
 
 
             }
@@ -119,21 +94,24 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
 
-
-                PrinterChangeListener.freeWorkPool("101");
+                printerChangeListener.freeWorkPool("101");
 
             }
         });
         findViewById(R.id.printd_bt).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                PrinterChangeListener.freeWorkPool("201");
+
+                printerChangeListener.freeWorkPool("201");
+
             }
         });
         findViewById(R.id.printe_bt).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                PrinterChangeListener.shutdownAllPool();
+
+                printerChangeListener.shutdownAllPool();
+
             }
         });
     }
@@ -151,18 +129,25 @@ public class MainActivity extends AppCompatActivity {
 
             if ((buffer[0] & ESC_STATE_PAPER_ERR) > 0) {
 
-                Toast.makeText(MainActivity.this, name + "缺纸了", Toast.LENGTH_SHORT).show();
+                Log.e("DOAING",name + "缺纸了");
+
+               // Toast.makeText(MainActivity.this, name + "缺纸了", Toast.LENGTH_SHORT).show();
 
 
             }
             if ((buffer[0] & ESC_STATE_COVER_OPEN) > 0) {
-                Toast.makeText(MainActivity.this, name + "没扣好盖子", Toast.LENGTH_SHORT).show();
+
+
+                Log.e("DOAING",name + "没扣好盖子");
+              //  Toast.makeText(MainActivity.this, name + "没扣好盖子", Toast.LENGTH_SHORT).show();
 
 
             }
             if ((buffer[0] & ESC_STATE_ERR_OCCURS) > 0) {
 
-                Toast.makeText(MainActivity.this, name + "打印错误", Toast.LENGTH_SHORT).show();
+                Log.e("DOAING",name + "打印错误");
+
+               // Toast.makeText(MainActivity.this, name + "打印错误", Toast.LENGTH_SHORT).show();
 
 
             }
