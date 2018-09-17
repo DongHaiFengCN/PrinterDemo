@@ -2,8 +2,6 @@ package com.example.ydd.myapplication;
 
 import android.content.Context;
 import android.content.Intent;
-import android.os.Bundle;
-import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
@@ -12,10 +10,8 @@ import android.widget.Toast;
 import com.gprinter.io.PortManager;
 
 import java.io.IOException;
-import java.sql.Time;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Timer;
@@ -41,29 +37,31 @@ public class PrinterChangeListener {
     public static final String READ_BUFFER_ARRAY = "read_buffer_array";
     public static final String READ_NAME = "read_name";
 
+    /**
+     * 判断是不是周期任务
+     */
     public static final String READ_PERIOD = "read_period";
+
     private static Context myContext;
 
     public static ExecutorService executorService;
 
-    public static boolean isPeriod = false;
-
-    //参数初始化
+    //cpu核心数
     private static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
 
 
     /**
-     *
+     *测试用的打印机map 实际开发进行替换
      */
     public static ConcurrentHashMap<String, PortManager> concurrentMap;
 
 
     /**
-     * 获取最大监听打印机的个数
+     * 获取最大监听打印机的个数，用于限制打印机的输入个数以及提示用户
      *
      * @return maximumPoolSize
      */
-    public static int getMaximumPoolSize() {
+    public static int getMaxPrinterSize() {
 
         return maximumPoolSize;
     }
@@ -165,7 +163,7 @@ public class PrinterChangeListener {
         //如果定时器开着，就去关闭
         if (timer != null) {
 
-            closePrinterListener();
+            cancelTimer();
         }
 
         Log.e("DOAING","发送单次监听");
@@ -173,16 +171,45 @@ public class PrinterChangeListener {
         sentCommand();
 
 
-
-
     }
 
     /**
-     * 查询指令标记,主线程拦截广播判断进行真正的命令发送
+     * 向所有打印机发送单次查询命令，如果周期命令开启就去关闭
+     */
+    public String openAppointPrinterListener(String name) {
+
+
+      PortManager portManager =  concurrentMap.get(name);
+
+      if(portManager == null){
+
+          return null;
+      }
+
+        //如果定时器开着，就去关闭
+        if (timer != null) {
+
+            cancelTimer();
+        }
+
+        Log.e("DOAING","发送指定打印机监听");
+
+        try {
+            portManager.writeDataImmediately(PrinterChangeListener.data, 0, PrinterChangeListener.data.size());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
+        return name;
+    }
+
+    /**
+     * 发送查询指令标记广播,主线程拦截广播判断进行真正的命令发送
      */
     private void sentCommand() {
-        LocalBroadcastManager localBroadcastManager = LocalBroadcastManager.getInstance(myContext.getApplicationContext());
 
+        LocalBroadcastManager localBroadcastManager = LocalBroadcastManager.getInstance(myContext);
         Intent intent = new Intent(PRINTER_URL);
         intent.putExtra(READ_PERIOD, true);
         localBroadcastManager.sendBroadcast(intent);
@@ -191,7 +218,7 @@ public class PrinterChangeListener {
     /**
      * 关闭定时器
      */
-    public void closePrinterListener() {
+    public void cancelTimer() {
 
         if (timer != null) {
 
@@ -255,7 +282,7 @@ public class PrinterChangeListener {
 
             if (concurrentMap.isEmpty()) {
 
-                closePrinterListener();
+                cancelTimer();
             }
 
             return true;
@@ -277,7 +304,7 @@ public class PrinterChangeListener {
             Toast.makeText(myContext, "解除所有打印机监听", Toast.LENGTH_SHORT).show();
 
             //关闭所有的打印机指令查询
-            closePrinterListener();
+            cancelTimer();
         }
 
 

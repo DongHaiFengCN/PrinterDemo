@@ -11,6 +11,7 @@ import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
+import android.widget.Toast;
 
 import com.gprinter.command.EscCommand;
 import com.gprinter.command.LabelCommand;
@@ -34,19 +35,7 @@ public class MainActivity extends AppCompatActivity {
 
     private EthernetPort ethernetPort1;
     private EthernetPort ethernetPort2;
-    int i = 0;
-
-
     private PrinterChangeListener printerChangeListener;
-
-    private Handler handler = new Handler(new Handler.Callback() {
-        @Override
-        public boolean handleMessage(Message msg) {
-
-
-            return false;
-        }
-    });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,7 +61,7 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-        //每天添加一个打印机或者启动一个打印机就去添加一个对应的打印机的监听线程
+        //每添加一个打印机或者启动一个打印机就去添加一个对应的打印机的监听线程
         printerChangeListener.addPoolThread(new WorkRunnable(getApplicationContext(), ethernetPort1, "101"));
 
 
@@ -82,7 +71,7 @@ public class MainActivity extends AppCompatActivity {
         printerChangeListener.addPoolThread(new WorkRunnable(getApplicationContext(), ethernetPort2, "201"));
 
 
-        //动态的添加新打印机新数据 测试
+        //动态的添加新打印机新数据 测试 实际开发中concurrentMap替换成缓存打印机的哪个map
         concurrentMap.put("101", ethernetPort1);
 
         concurrentMap.put("201", ethernetPort2);
@@ -113,7 +102,11 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
 
-                printerChangeListener.freeWorkPool("101");
+                //释放指定打印机的监听线程
+               if(printerChangeListener.freeWorkPool("101")){
+
+                   Toast.makeText(MainActivity.this,"移除了101的监听",Toast.LENGTH_SHORT).show();
+               }
 
             }
         });
@@ -129,7 +122,18 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
 
+                //终止所有打印机的线程监听
                 printerChangeListener.shutdownAllPool();
+
+            }
+        });
+
+        findViewById(R.id.printf_bt).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                //查看指定打印机状态
+                printerChangeListener.openAppointPrinterListener("101");
 
             }
         });
@@ -151,7 +155,10 @@ public class MainActivity extends AppCompatActivity {
 
             if (bundle != null) {
 
+
+                //可以通过打印机名称来处理对应打印机的业务逻辑
                 String name = bundle.getString(READ_NAME);
+
 
                 byte[] buffer = bundle.getByteArray(READ_BUFFER_ARRAY);
 

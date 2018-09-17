@@ -32,7 +32,6 @@ public class WorkRunnable implements Runnable {
 
         this.portManager = portManager;
 
-
         this.name = name;
 
         localBroadcastManager = LocalBroadcastManager.getInstance(context.getApplicationContext());
@@ -55,7 +54,6 @@ public class WorkRunnable implements Runnable {
                 }
 
                 if (len > 0) {
-
                     Intent intent = new Intent(PRINTER_URL);
                     Bundle bundle = new Bundle();
                     bundle.putByteArray(READ_BUFFER_ARRAY, buffer);
