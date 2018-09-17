@@ -53,26 +53,30 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+
+        //打印机的状态，命令都在广播处理
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(PRINTER_URL);
         LocalReceiver localReceiver = new LocalReceiver();
-
-        //注册本地接收器
         LocalBroadcastManager.getInstance(this).registerReceiver(localReceiver, intentFilter);
 
-        //初始化监听监听器
+
+
+        //初始化监听监听器,全局单例模式
         printerChangeListener = PrinterChangeListener.getInstance(getApplicationContext());
 
 
+        //------------------------- 测试数据部分------------------------
         ethernetPort1 = new EthernetPort("192.168.2.101", 9100);
-
         Log.e("DOAING", ethernetPort1.openPort() + " 第一个打开");
 
+
+
+        //每天添加一个打印机或者启动一个打印机就去添加一个对应的打印机的监听线程
         printerChangeListener.addPoolThread(new WorkRunnable(getApplicationContext(), ethernetPort1, "101"));
 
 
         ethernetPort2 = new EthernetPort("192.168.2.201", 9100);
-
         Log.e("DOAING", ethernetPort2.openPort() + " 第二个打开");
 
         printerChangeListener.addPoolThread(new WorkRunnable(getApplicationContext(), ethernetPort2, "201"));
@@ -82,11 +86,14 @@ public class MainActivity extends AppCompatActivity {
         concurrentMap.put("101", ethernetPort1);
 
         concurrentMap.put("201", ethernetPort2);
+        //------------------------- 测试数据------------------------
+
 
         findViewById(R.id.printa_bt).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
 
+                //开启周期监听，当前设置2000毫秒一个监听
                 printerChangeListener.openPeriodPrinterListener(2000L);
 
             }
@@ -96,7 +103,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
 
+                //发起单次的查询命令
                 printerChangeListener.openOncePrinterListener();
+
             }
         });
 
