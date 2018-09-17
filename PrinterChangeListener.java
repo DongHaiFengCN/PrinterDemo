@@ -1,6 +1,11 @@
 package com.example.ydd.myapplication;
 
 import android.content.Context;
+import android.content.Intent;
+import android.os.Bundle;
+import android.os.Handler;
+import android.support.annotation.NonNull;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -36,9 +41,12 @@ public class PrinterChangeListener {
     public static final String READ_BUFFER_ARRAY = "read_buffer_array";
     public static final String READ_NAME = "read_name";
 
+    public static final String READ_PERIOD = "read_period";
     private static Context myContext;
 
     public static ExecutorService executorService;
+
+    public static boolean isPeriod = false;
 
     //参数初始化
     private static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
@@ -93,11 +101,10 @@ public class PrinterChangeListener {
     public static final int ESC_STATE_ERR_OCCURS = 0x40;
 
 
-    private static Vector<Byte> data;
+    public static Vector<Byte> data;
 
     private static Timer timer;
 
-    private static Long period = 2000L;
 
     public static PrinterChangeListener getInstance(Context context) {
 
@@ -107,7 +114,6 @@ public class PrinterChangeListener {
 
             printerChangeListener = new PrinterChangeListener();
 
-            timer = new Timer();
 
             data = new Vector<>(esc.length);
 
@@ -129,64 +135,72 @@ public class PrinterChangeListener {
     }
 
     /**
-     * 定时向所有打印机发送询问指令
+     * 每period毫秒向所有打印机发送询问指令，如果定时器为关闭为启动的状态就去初始化一个定时器
      */
-    public  void openPrinterListener() {
+    public void openPeriodPrinterListener( @NonNull Long period) {
 
+        //如果定时器开的
+        if (timer == null) {
 
+            timer = new Timer();
 
-       PortManager portManager = concurrentMap.get("101");
+            timer.schedule(new TimerTask() {
+                @Override
+                public void run() {
 
-        try {
-            portManager.writeDataImmediately(data, 0, data.size());
+                    sentCommand();
+                }
+            }, 0, period);
 
-        } catch (IOException e) {
-            e.printStackTrace();
+            Log.e("DOAING","开启周期命令");
         }
 
-        Objects.requireNonNull(timer, "首先要初始化PrinterChangeListener监听器～");
+    }
 
-/*
-        timer.schedule(new TimerTask() {
-            @Override
-            public void run() {
+    /**
+     * 向所有打印机发送单次查询命令，如果周期命令开启就去关闭
+     */
+    public void openOncePrinterListener() {
+
+        //如果定时器开着，就去关闭
+        if (timer != null) {
+
+            closePrinterListener();
+        }
+
+        Log.e("DOAING","发送单次监听");
+
+        sentCommand();
 
 
-         *//*       try {
-                    concurrentMap.get("101").writeDataImmediately(data, 0, data.size());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-*//*
-        *//*        Iterator iterator = concurrentMap.entrySet().iterator();
 
-                while (iterator.hasNext()) {
 
-                    Map.Entry<String, PortManager> entry = (Map.Entry<String, PortManager>) iterator.next();
+    }
 
-                    try {
-                        entry.getValue().writeDataImmediately(data, 0, data.size());
+    /**
+     * 查询指令标记,主线程拦截广播判断进行真正的命令发送
+     */
+    private void sentCommand() {
+        LocalBroadcastManager localBroadcastManager = LocalBroadcastManager.getInstance(myContext.getApplicationContext());
 
-                        Log.e("DOAING",entry.getKey());
-
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-
-                }*//*
-            }
-        }, 0, period);*/
-
+        Intent intent = new Intent(PRINTER_URL);
+        intent.putExtra(READ_PERIOD, true);
+        localBroadcastManager.sendBroadcast(intent);
     }
 
     /**
      * 关闭定时器
      */
-    public  void closePrinterListener() {
+    public void closePrinterListener() {
 
         if (timer != null) {
 
             timer.cancel();
+
+            timer =null;
+
+            Log.e("DOAING","关闭周期命令");
+
 
         }
     }
@@ -196,7 +210,7 @@ public class PrinterChangeListener {
      *
      * @param workRunnable
      */
-    public  void addPoolThread(WorkRunnable workRunnable) {
+    public void addPoolThread(WorkRunnable workRunnable) {
 
         Objects.requireNonNull(executorService, "请首先初始化线程池～");
 
@@ -227,7 +241,7 @@ public class PrinterChangeListener {
      *
      * @param name
      */
-    public  boolean freeWorkPool(String name) {
+    public boolean freeWorkPool(String name) {
 
         //获取工作线程
         WorkRunnable workRunnable = workPool.get(name);
@@ -254,7 +268,7 @@ public class PrinterChangeListener {
     /**
      * 终止所有的打印机监听
      */
-    public  void shutdownAllPool() {
+    public void shutdownAllPool() {
 
         if (executorService != null) {
 
@@ -262,12 +276,31 @@ public class PrinterChangeListener {
 
             Toast.makeText(myContext, "解除所有打印机监听", Toast.LENGTH_SHORT).show();
 
-
             //关闭所有的打印机指令查询
             closePrinterListener();
         }
 
 
+    }
+
+    /**
+     * 打印机状态命令
+     */
+    public void executePrinterStatusCommand() {
+        Iterator iterator = concurrentMap.entrySet().iterator();
+
+        while (iterator.hasNext()) {
+
+            Map.Entry<String, PortManager> entry = (Map.Entry<String, PortManager>) iterator.next();
+
+            try {
+                entry.getValue().writeDataImmediately(PrinterChangeListener.data, 0, PrinterChangeListener.data.size());
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+        }
     }
 
 }

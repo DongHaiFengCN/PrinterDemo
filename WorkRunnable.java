@@ -46,8 +46,6 @@ public class WorkRunnable implements Runnable {
 
         {
 
-
-
             while (isRunning) {
 
                 try {

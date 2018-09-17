@@ -5,17 +5,21 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
-import android.widget.Toast;
+
 import com.gprinter.command.EscCommand;
 import com.gprinter.command.LabelCommand;
 import com.gprinter.io.EthernetPort;
 import com.gprinter.io.PortManager;
+
 import java.io.IOException;
 import java.util.Vector;
+
 import static com.example.ydd.myapplication.PrinterChangeListener.ESC_STATE_COVER_OPEN;
 import static com.example.ydd.myapplication.PrinterChangeListener.ESC_STATE_ERR_OCCURS;
 import static com.example.ydd.myapplication.PrinterChangeListener.ESC_STATE_PAPER_ERR;
@@ -23,7 +27,8 @@ import static com.example.ydd.myapplication.PrinterChangeListener.PRINTER_URL;
 import static com.example.ydd.myapplication.PrinterChangeListener.READ_BUFFER_ARRAY;
 import static com.example.ydd.myapplication.PrinterChangeListener.READ_DATA;
 import static com.example.ydd.myapplication.PrinterChangeListener.READ_NAME;
-import static com.example.ydd.myapplication.PrinterChangeListener.esc;
+import static com.example.ydd.myapplication.PrinterChangeListener.READ_PERIOD;
+import static com.example.ydd.myapplication.PrinterChangeListener.concurrentMap;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -33,6 +38,16 @@ public class MainActivity extends AppCompatActivity {
 
 
     private PrinterChangeListener printerChangeListener;
+
+    private Handler handler = new Handler(new Handler.Callback() {
+        @Override
+        public boolean handleMessage(Message msg) {
+
+
+            return false;
+        }
+    });
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -56,7 +71,6 @@ public class MainActivity extends AppCompatActivity {
         printerChangeListener.addPoolThread(new WorkRunnable(getApplicationContext(), ethernetPort1, "101"));
 
 
-
         ethernetPort2 = new EthernetPort("192.168.2.201", 9100);
 
         Log.e("DOAING", ethernetPort2.openPort() + " 第二个打开");
@@ -64,19 +78,16 @@ public class MainActivity extends AppCompatActivity {
         printerChangeListener.addPoolThread(new WorkRunnable(getApplicationContext(), ethernetPort2, "201"));
 
 
-
-
-
         //动态的添加新打印机新数据 测试
-        printerChangeListener.concurrentMap.put("101",ethernetPort1);
+        concurrentMap.put("101", ethernetPort1);
 
-        printerChangeListener.concurrentMap.put("201",ethernetPort2);
+        concurrentMap.put("201", ethernetPort2);
 
         findViewById(R.id.printa_bt).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
 
-                printerChangeListener.openPrinterListener();
+                printerChangeListener.openPeriodPrinterListener(2000L);
 
             }
         });
@@ -85,8 +96,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
 
-
-
+                printerChangeListener.openOncePrinterListener();
             }
         });
 
@@ -116,6 +126,10 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     *
+     * 负责接收printerchangerListener 发出的查询广播命令，与workrunable的打印机具体返回值数据命令
+     */
     private class LocalReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -123,37 +137,43 @@ public class MainActivity extends AppCompatActivity {
 
             Bundle bundle = intent.getBundleExtra(READ_DATA);
 
-            String name = bundle.getString(READ_NAME);
-
-            byte[] buffer = bundle.getByteArray(READ_BUFFER_ARRAY);
-
-            if ((buffer[0] & ESC_STATE_PAPER_ERR) > 0) {
-
-                Log.e("DOAING",name + "缺纸了");
-
-               // Toast.makeText(MainActivity.this, name + "缺纸了", Toast.LENGTH_SHORT).show();
+            boolean isPeriod = intent.getBooleanExtra(READ_PERIOD,false);
 
 
-            }
-            if ((buffer[0] & ESC_STATE_COVER_OPEN) > 0) {
+            if (bundle != null) {
 
+                String name = bundle.getString(READ_NAME);
 
-                Log.e("DOAING",name + "没扣好盖子");
-              //  Toast.makeText(MainActivity.this, name + "没扣好盖子", Toast.LENGTH_SHORT).show();
+                byte[] buffer = bundle.getByteArray(READ_BUFFER_ARRAY);
 
+                if ((buffer[0] & ESC_STATE_PAPER_ERR) > 0) {
 
-            }
-            if ((buffer[0] & ESC_STATE_ERR_OCCURS) > 0) {
+                    Log.e("DOAING", name + "缺纸了");
 
-                Log.e("DOAING",name + "打印错误");
+                }
+                if ((buffer[0] & ESC_STATE_COVER_OPEN) > 0) {
 
-               // Toast.makeText(MainActivity.this, name + "打印错误", Toast.LENGTH_SHORT).show();
+                    Log.e("DOAING", name + "没扣好盖子");
 
+                }
+                if ((buffer[0] & ESC_STATE_ERR_OCCURS) > 0) {
 
+                    Log.e("DOAING", name + "打印错误");
+
+                }
             }
 
+
+            //发送打印机查询命令
+            if (isPeriod) {
+
+                printerChangeListener.executePrinterStatusCommand();
+
+            }
         }
     }
+
+
 
     /**
      * 发送票据
